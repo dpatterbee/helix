@@ -29,7 +29,10 @@ use helix_view::{
     keyboard::{KeyCode, KeyModifiers},
     Document, Editor, Theme, View,
 };
-use std::{mem::take, num::NonZeroUsize, path::PathBuf, rc::Rc, sync::Arc};
+use std::{
+    collections::VecDeque, iter::Sum, mem::take, num::NonZeroUsize, path::PathBuf, rc::Rc,
+    sync::Arc,
+};
 
 use tui::{buffer::Buffer as Surface, text::Span};
 
@@ -566,25 +569,43 @@ impl EditorView {
             .try_get("ui.bufferline")
             .unwrap_or_else(|| editor.theme.get("ui.statusline.inactive"));
 
-        let mut x = viewport.x;
         let current_doc = view!(editor).doc;
 
-        for doc in editor.documents() {
-            let fname = doc
-                .path()
-                .unwrap_or(&scratch)
-                .file_name()
-                .unwrap_or_default()
-                .to_str()
-                .unwrap_or_default();
+        let tabs: VecDeque<(String, u16, bool, Style)> = editor
+            .documents()
+            .map(|doc| {
+                let fname = doc
+                    .path()
+                    .unwrap_or(&scratch)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_str()
+                    .unwrap_or_default();
 
-            let style = if current_doc == doc.id() {
-                bufferline_active
-            } else {
-                bufferline_inactive
-            };
+                let text = format!(" {}{} ", fname, if doc.is_modified() { "[+]" } else { "" });
+                let width = text.width() as u16;
+                let current = current_doc == doc.id();
 
-            let text = format!(" {}{} ", fname, if doc.is_modified() { "[+]" } else { "" });
+                let style = if current {
+                    bufferline_active
+                } else {
+                    bufferline_inactive
+                };
+
+                (text, width, current, style)
+            })
+            .collect();
+
+        let visible_index = tabs.iter().position(|(_, _, t, _)| *t).unwrap();
+        let mut s = 0;
+
+        while tabs.iter().fold(0, |a, (_, w, _, _)| a + w) >= surface.area.width - viewport.x {
+            tabs.pop_front();
+        }
+
+        let mut x = viewport.x;
+
+        for (text, style, _) in tabs {
             let used_width = viewport.x.saturating_sub(x);
             let rem_width = surface.area.width.saturating_sub(used_width);
 

@@ -291,7 +291,7 @@ impl Buffer {
         self.set_stringn(x, y, string, usize::MAX, style);
     }
 
-    /// Print at most the first n characters of a string if enough space is available
+    /// Print at most the first `width` characters of a string if enough space is available
     /// until the end of the line
     pub fn set_stringn<S>(
         &mut self,
